@@ -1,0 +1,4 @@
+fastembed
+lancedb
+pillow
+numpy
