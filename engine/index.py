@@ -1,12 +1,31 @@
 """Crawl folders for images and build the searchable vector index."""
 from __future__ import annotations
 
+import json
 import os
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
 
-from .db import get_table
+from .db import DEFAULT_DB_DIR, get_table, invalidate_table_cache
 from .embed import embed_images
+"""
+One JSONL line per file we couldn't index, with the stage that failed and why.
+"""
+LEDGER_PATH = DEFAULT_DB_DIR.parent / "failed.jsonl"
+
+
+@dataclass
+class IndexResult:
+    added: int = 0        # embeddings written to the table
+    skipped: int = 0      # files that vanished / became unreadable mid-run
+    failed: int = 0       # images fastembed/PIL couldn't decode
+    ledger: list = field(default_factory=list)  # detail rows for the two above
+
+    @property
+    def ledger_path(self) -> str | None:
+        return str(LEDGER_PATH) if self.ledger else None
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".heic"}
 
@@ -26,34 +45,42 @@ def find_images(root: str | Path) -> Iterator[Path]:
                 yield Path(dirpath) / name
 
 
-def index_folder(root: str | Path, batch_size: int = 32, progress=None) -> int:
-    """Index all images under root. Returns the number of images added.
+def index_folder(root: str | Path, batch_size: int = 32, progress=None) -> IndexResult:
+    """Index all images under root. Returns an IndexResult (added/skipped/failed).
     progress is discussed in cli.py, and is a callable that takes (done, path) and prints progress to the user.
     """
-    table = get_table()
+    table = get_table()  # writer path: always fresh, so we see our own writes
+    result = IndexResult()
 
     # Skip files already indexed and unchanged.
     known: dict[str, float] = {}
     if table.count_rows() > 0:
-        for row in table.search().select(["path", "mtime"]).limit(10_000_000).to_list(): #The lance by default returns 10 entries, so we put a large limit to get all the entries. Though, its not good for large datasets as it causes memory issues, it may be fine because we take only row and mtime. 
+        for row in table.search().select(["path", "mtime"]).limit(10_000_000).to_list(): #The lance by default returns 10 entries, so we put a large limit to get all the entries. Though, its not good for large datasets as it causes memory issues, it may be fine because we take only row and mtime.
             known[row["path"]] = row["mtime"]
 
     todo: list[Path] = []
     for path in find_images(root):
         try:
             st = path.stat() #returns mtime, size, ctime (metadata-change time), atime (last-access time)...
-        except OSError:
+        except OSError as e:
+            # Race: file listed by os.walk but gone/unreadable by stat(). Don't
+            # crash and don't skip silently — record it so it leaves a trace.
+            result.skipped += 1
+            result.ledger.append({"path": str(path), "stage": "stat", "error": repr(e)})
             continue
         if known.get(str(path)) == st.st_mtime: #if both mtime stored in the dictionary and the current mtime are same, skip it. Else add it to todo list for indexing.
             continue
         todo.append(path)
 
-    added = 0
+    # embed_images appends corrupt/undecodable images here instead of crashing.
+    embed_failed: list = []
     batch: list[dict] = []
-    for done, (path_str, vector) in enumerate(embed_images(todo), start=1):
+    for done, (path_str, vector) in enumerate(embed_images(todo, failed=embed_failed), start=1):
         try:
-            st = os.stat(path_str) #path_str is a plain string, and strings have no .stat(). os.stat(path_str) is the more direct route — string goes straight to the syscall, nothing built in between. 
-        except OSError:
+            st = os.stat(path_str) #path_str is a plain string, and strings have no .stat(). os.stat(path_str) is the more direct route — string goes straight to the syscall, nothing built in between.
+        except OSError as e:
+            result.skipped += 1
+            result.ledger.append({"path": path_str, "stage": "stat", "error": repr(e)})
             continue
         batch.append({
             "path": path_str,
@@ -63,7 +90,7 @@ def index_folder(root: str | Path, batch_size: int = 32, progress=None) -> int:
         })
         if len(batch) >= batch_size:
             table.add(batch)
-            added += len(batch)
+            result.added += len(batch)
             batch = []
 
         if progress:
@@ -71,5 +98,54 @@ def index_folder(root: str | Path, batch_size: int = 32, progress=None) -> int:
 
     if batch: #to catch any remaining images that didn't fill a complete batch.
         table.add(batch)
-        added += len(batch)
-    return added
+        result.added += len(batch)
+
+    for f in embed_failed:
+        result.failed += 1
+        result.ledger.append({"path": f["path"], "stage": "embed", "error": f["error"]})
+
+    invalidate_table_cache()  # searches must re-open to see what we just wrote
+    _write_ledger(result.ledger)
+    return result
+
+
+def _write_ledger(rows: list) -> None:
+    """Append failure/skip rows to ~/.lumen/failed.jsonl (one JSON per line)."""
+    if not rows:
+        return
+    LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
+    ts = time.time()
+    with open(LEDGER_PATH, "a") as fh:
+        for row in rows:
+            fh.write(json.dumps({**row, "ts": ts}) + "\n")
+
+
+def prune_missing(progress=None) -> int:
+    """
+    Remove index entries whose files no longer exist on disk.
+    Or else those deleted after indexing would stay forever as dead search hits.
+    Deletes are done via SQL over LanceDB.
+    """
+    table = get_table()
+    if table.count_rows() == 0:
+        return 0
+
+    missing: list[str] = []
+    for row in table.search().select(["path"]).limit(10_000_000).to_list():
+        if not os.path.exists(row["path"]):
+            missing.append(row["path"])
+        if progress:
+            progress(len(missing), row["path"])
+
+    for i in range(0, len(missing), 256):
+        chunk = missing[i:i + 256]
+        in_list = ",".join("'" + p.replace("'", "''") + "'" for p in chunk) #escapes any single quotes inside the path itself by doubling them.
+        table.delete(f"path IN ({in_list})")
+        """
+        for paths ["/a.jpg", "/Jaswin's Photos/b.jpg"], this produces:
+            '/a.jpg','/Jaswin''s Photos/b.jpg'
+            and the final call becomes:
+                table.delete("path IN ('/a.jpg','/Jaswin''s Photos/b.jpg')")
+        """
+    invalidate_table_cache()
+    return len(missing)

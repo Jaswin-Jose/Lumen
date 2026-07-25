@@ -21,8 +21,24 @@ def cmd_index(args):
             print(f"  ...{done} images", end="\r", flush=True) #for live updating counter
 
     print(f"Indexing {args.folder} (first run downloads the CLIP model)...")
-    added = index_folder(args.folder, progress=progress)
-    print(f"\nIndexed {added} new image(s) in {time.time() - start:.1f}s")
+    res = index_folder(args.folder, progress=progress)
+    print(f"\nIndexed {res.added} new image(s) in {time.time() - start:.1f}s")
+    if res.skipped or res.failed:
+        print(f"Skipped {res.skipped} (vanished/unreadable), "
+              f"{res.failed} failed to decode. See {res.ledger_path}")
+
+
+def cmd_reset(args):
+    from engine.db import drop_table
+
+    print("Index dropped." if drop_table() else "No index to drop.")
+
+
+def cmd_prune(args):
+    from engine.index import prune_missing
+
+    n = prune_missing()
+    print(f"Pruned {n} entr{'y' if n == 1 else 'ies'} for files no longer on disk.")
 
 
 def _show(results):
@@ -62,6 +78,12 @@ def main(argv=None):
     pm.add_argument("image")
     pm.add_argument("-n", "--limit", type=int, default=20)
     pm.set_defaults(func=cmd_similar)
+
+    pr = sub.add_parser("reset", help="drop the whole index (rebuild from scratch)")
+    pr.set_defaults(func=cmd_reset)
+
+    pp = sub.add_parser("prune", help="remove entries for files no longer on disk")
+    pp.set_defaults(func=cmd_prune)
 
     args = p.parse_args(argv)
     args.func(args)
