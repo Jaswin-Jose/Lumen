@@ -5,6 +5,7 @@ LanceDB scales to 100k+ vectors.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 import lancedb
@@ -81,3 +82,23 @@ def drop_table(db_dir: str | Path = DEFAULT_DB_DIR) -> bool:
         db.drop_table(TABLE_NAME)
     invalidate_table_cache()
     return existed
+
+
+def compact(db_dir: str | Path = DEFAULT_DB_DIR, retention_days: float = 7.0):
+    """
+    LanceDB never deletes on its own — every index/prune/delete leaves a new
+    version behind, so for an app meant to run indefinitely, disk quietly grows
+    forever unless this runs. optimize() does the two maintenance jobs at once:
+      * compacts many small data files from incremental adds into fewer big
+        ones (keeps reads fast), and
+      * drops versions OLDER than the retention window (recent history is kept
+        so you can still recover / time-travel; anything older is reclaimed).
+    Deliberate and manual by design — call it on a schedule, not per index.
+    Returns (versions_before, versions_after, stats).
+    """
+    table = get_table(db_dir)
+    before = len(table.list_versions())
+    stats = table.optimize(cleanup_older_than=timedelta(days=retention_days))
+    after = len(table.list_versions())
+    invalidate_table_cache()
+    return before, after, stats

@@ -41,6 +41,18 @@ def cmd_prune(args):
     print(f"Pruned {n} entr{'y' if n == 1 else 'ies'} for files no longer on disk.")
 
 
+def cmd_compact(args):
+    from engine.db import compact
+
+    before, after, stats = compact(retention_days=args.days)
+    freed = ""
+    try:  # stats shape varies across lancedb versions; surface bytes if present
+        freed = f", freed {stats.prune.bytes_removed / 1e6:.1f} MB"
+    except AttributeError:
+        pass
+    print(f"Compacted: {before} -> {after} versions{freed}")
+
+
 def _show(results):
     if not results:
         print("No matches. Have you indexed a folder yet?")
@@ -84,6 +96,11 @@ def main(argv=None):
 
     pp = sub.add_parser("prune", help="remove entries for files no longer on disk")
     pp.set_defaults(func=cmd_prune)
+
+    pc = sub.add_parser("compact", help="reclaim disk: compact + prune old index versions")
+    pc.add_argument("--days", type=float, default=7.0,
+                    help="keep versions newer than this many days (default 7)")
+    pc.set_defaults(func=cmd_compact)
 
     args = p.parse_args(argv)
     args.func(args)

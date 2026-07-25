@@ -15,6 +15,12 @@ One JSONL line per file we couldn't index, with the stage that failed and why.
 """
 LEDGER_PATH = DEFAULT_DB_DIR.parent / "failed.jsonl"
 
+# The ledger is append-only, so on a machine running for years it would grow
+# without bound. Cap it: once the file crosses MAX_LEDGER_BYTES, keep only the
+# most recent MAX_LEDGER_LINES entries (newest failures are the useful ones).
+MAX_LEDGER_BYTES = 5 * 1024 * 1024  # 5 MB
+MAX_LEDGER_LINES = 5_000
+
 
 @dataclass
 class IndexResult:
@@ -118,6 +124,26 @@ def _write_ledger(rows: list) -> None:
     with open(LEDGER_PATH, "a") as fh:
         for row in rows:
             fh.write(json.dumps({**row, "ts": ts}) + "\n")
+    _rotate_ledger()
+
+
+def _rotate_ledger() -> None:
+    """Trim the ledger to its most recent lines once it grows past the cap.
+
+    The size check is cheap and almost always the only thing that runs; the
+    rewrite happens only on the rare occasion the file actually gets large.
+    """
+    try:
+        if LEDGER_PATH.stat().st_size <= MAX_LEDGER_BYTES:
+            return
+    except OSError:
+        return
+    with open(LEDGER_PATH) as fh:
+        lines = fh.readlines()
+    if len(lines) <= MAX_LEDGER_LINES:
+        return
+    with open(LEDGER_PATH, "w") as fh:
+        fh.writelines(lines[-MAX_LEDGER_LINES:])
 
 
 def prune_missing(progress=None) -> int:
