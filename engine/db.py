@@ -37,8 +37,47 @@ def connect(db_dir: str | Path = DEFAULT_DB_DIR):
 
 
 def get_table(db_dir: str | Path = DEFAULT_DB_DIR):
-    """Open the images table, creating it (empty) on first use."""
+    """Open the images table, creating it (empty) on first use.
+    This always re-opens from disk. Writers (indexing) use it directly so
+    they see the freshest state; the search/read path uses get_cached_table().
+    """
     db = connect(db_dir)
     if TABLE_NAME in db.table_names():
         return db.open_table(TABLE_NAME)
     return db.create_table(TABLE_NAME, schema=ImageRecord)
+
+"""
+While using this as an app that answers many searches, reconnecting + re-reading the
+LanceDB manifest on every query is wasted work (the same reason we cache the
+CLIP models). So we cache the opened table. 
+So when the indexer adds new content, we need to invalidate the cache so the next search sees the new data.
+"""
+_table_cache: dict[str, object] = {}
+
+
+def get_cached_table(db_dir: str | Path = DEFAULT_DB_DIR):
+    key = str(db_dir)
+    if key not in _table_cache:
+        _table_cache[key] = get_table(db_dir)
+    return _table_cache[key]
+
+
+def invalidate_table_cache() -> None:
+    """Drop cached handles so the next read re-opens at the latest version."""
+    _table_cache.clear()
+
+
+def drop_table(db_dir: str | Path = DEFAULT_DB_DIR) -> bool:
+    """Delete the whole images table — a true 'reset from scratch'.
+
+    A LanceDB table is a versioned DIRECTORY tree, not a single file, and it's
+    append-only (deletes just add a new version). So you can't reset it by
+    removing one file; the reliable resets are `rm -rf` the index dir or, as
+    here, dropping the table. Returns True if a table existed.
+    """
+    db = connect(db_dir)
+    existed = TABLE_NAME in db.table_names()
+    if existed:
+        db.drop_table(TABLE_NAME)
+    invalidate_table_cache()
+    return existed
