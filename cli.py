@@ -7,8 +7,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
+from datetime import datetime
 
 
 def cmd_index(args):
@@ -51,6 +53,28 @@ def cmd_compact(args):
     except AttributeError:
         pass
     print(f"Compacted: {before} -> {after} versions{freed}")
+
+
+def cmd_failures(args):
+    from engine.index import LEDGER_PATH
+
+    if not LEDGER_PATH.exists():
+        print("No failure ledger yet — nothing has failed to index.")
+        return
+    lines = LEDGER_PATH.read_text().splitlines()
+    if not lines:
+        print("Failure ledger is empty.")
+        return
+
+    tail = lines[-args.limit:] if args.limit > 0 else lines
+    print(f"Showing last {len(tail)} of {len(lines)} failure(s) — {LEDGER_PATH}")
+    for line in tail:
+        try:
+            r = json.loads(line)
+            ts = datetime.fromtimestamp(r.get("ts", 0)).strftime("%Y-%m-%d %H:%M")
+            print(f"  [{ts}] {r.get('stage', '?'):5}  {r.get('path', '?')}  — {r.get('error', '')}")
+        except ValueError:  # not valid JSON — show the raw line
+            print(f"  {line}")
 
 
 def _show(results):
@@ -101,6 +125,11 @@ def main(argv=None):
     pc.add_argument("--days", type=float, default=7.0,
                     help="keep versions newer than this many days (default 7)")
     pc.set_defaults(func=cmd_compact)
+
+    pfl = sub.add_parser("failures", help="show recent entries from the failure ledger")
+    pfl.add_argument("-n", "--limit", type=int, default=20,
+                     help="how many lines from the end (0 = all, default 20)")
+    pfl.set_defaults(func=cmd_failures)
 
     args = p.parse_args(argv)
     args.func(args)

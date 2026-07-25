@@ -46,9 +46,19 @@ engine/search.py   text / image query -> ranked files
 cli.py             command-line interface
 ```
 
-#Usage
+## Usage
 ```
 .venv/bin/python cli.py index <folder-to-be-indexed>
 .venv/bin/python cli.py similar <path-to-image-file>
 .venv/bin/python cli.py search <search-text>
+.venv/bin/python cli.py failures -n 20 
 ```
+
+## Test
+```
+curl -O http://images.cocodataset.org/zips/val2017.zip && unzip -q val2017.zip
+.venv/bin/python cli.py index val2017  
+.venv/bin/python cli.py search "bear"
+```
+### Result
+![Supposed to be a bear image](<Screenshot 2026-07-25 at 10.19.16 AM.png>)
