@@ -54,12 +54,34 @@ def embed_image(path: str | Path) -> np.ndarray:
     return _normalize(np.asarray(vec, dtype=np.float32))
 
 
-def embed_images(paths: Iterable[str | Path]):
-    """Batch-embed image paths, yielding (path, normalized_vector). Default batch size = 16 for images and 256 for text.
+def embed_images(paths: Iterable[str | Path], failed: list | None = None,
+                 chunk_size: int = 32):
+    """Batch-embed image paths, yielding (path, normalized_vector).
 
-    Batching keeps ONNX inference fast at large scale. Paths that fail to
-    load (corrupt / unreadable) are skipped rather than aborting the run.
+    Fastembed opens each image with PIL inside its generator, so a
+    single bad file throws mid-batch and would otherwise kill everything after
+    it. To solve it, we embed in chunks and force each chunk to completion
+    (list(...)) BEFORE yielding — so a mid-chunk error emits no partial results
+    we'd then re-emit. If a chunk throws, we retry it one-by-one to isolate the
+    culprit; files that still fail are appended to `failed` as
+    {"path", "error"} and skipped instead of crashing the indexer.
     """
     paths = [str(p) for p in paths]
-    for path, vec in zip(paths, _image_model().embed(paths)):
-        yield path, _normalize(np.asarray(vec, dtype=np.float32))
+    for i in range(0, len(paths), chunk_size):
+        chunk = paths[i:i + chunk_size]
+        try:
+            results = list(zip(chunk, _image_model().embed(chunk)))
+        except Exception:
+            """
+            One bad file somewhere in the chunk — fall back to per-image so
+            the good ones still get indexed and the bad one is recorded.
+            """
+            for p in chunk:
+                try:
+                    yield p, embed_image(p)
+                except Exception as e:  # genuinely corrupt / unreadable
+                    if failed is not None:
+                        failed.append({"path": p, "error": repr(e)})
+            continue
+        for path, vec in results:
+            yield path, _normalize(np.asarray(vec, dtype=np.float32))

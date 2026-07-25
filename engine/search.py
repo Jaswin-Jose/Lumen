@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .db import get_table
+from .db import get_cached_table
 from .embed import embed_image, embed_text
 
 
 def _run(query_vector, limit: int):
-    table = get_table()
+    table = get_cached_table()  # cached: avoids re-opening the DB every search
     if table.count_rows() == 0:
         return []
     rows = (
