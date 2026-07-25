@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Iterator
 
 from .db import DEFAULT_DB_DIR, get_table, invalidate_table_cache
+from .detect import detect_labels, labels_to_field
 from .embed import embed_images
 """
 One JSONL line per file we couldn't index, with the stage that failed and why.
@@ -88,10 +89,18 @@ def index_folder(root: str | Path, batch_size: int = 32, progress=None) -> Index
             result.skipped += 1
             result.ledger.append({"path": path_str, "stage": "stat", "error": repr(e)})
             continue
+        # Detect objects for this image. A detection failure shouldn't drop the image — index it
+        # with no labels and leave a trace in the ledger.
+        try:
+            labels = detect_labels(path_str)
+        except Exception as e:
+            labels = []
+            result.ledger.append({"path": path_str, "stage": "detect", "error": repr(e)})
         batch.append({
             "path": path_str,
             "mtime": st.st_mtime,
             "size": st.st_size,
+            "labels": labels_to_field(labels),
             "vector": vector.tolist(),
         })
         if len(batch) >= batch_size:

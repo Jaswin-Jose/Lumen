@@ -7,10 +7,10 @@ Everything runs **fully locally**; no files leave your machine.
 ## How it works
 
 Every file is turned into a vector (a point in "meaning space") using
-**CLIP** (via `fastembed`, ONNX — no PyTorch). Text and images share one
+**jina clip v1** (via `fastembed`, ONNX — no PyTorch). Text and images share one
 space, so the words "blue fish" land near a photo of a blue fish. Search =
 find the nearest vectors. Vectors live in **LanceDB** (embedded, on-disk,
-scales to 100k+).
+scales to 100k+). YOLO is used for object detection.
 
 ```
 query (text OR image) --> CLIP encoder --> vector --> LanceDB nearest-neighbor --> files
@@ -58,7 +58,7 @@ cli.py             command-line interface
 ```
 curl -O http://images.cocodataset.org/zips/val2017.zip && unzip -q val2017.zip
 .venv/bin/python cli.py index val2017  
-.venv/bin/python cli.py search "bear"
+.venv/bin/python cli.py search "A yellow room with a woman"      
 ```
 ### Result
-![Supposed to be a bear image](<Screenshot 2026-07-25 at 10.19.16 AM.png>)
+![A yellow room with a woman](image.png)

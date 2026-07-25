@@ -1,5 +1,6 @@
 """
 CLIP (Contrastive Language-Image Pre-training, OpenAI) is a model trained to push text and images into the same vector space (512-dim), so a caption and a matching photo end up as nearby vectors.
+But since CLIP is less accurate with complex queries, I use jina-clip-v1. Though I may include CLIP for weaker machines in the future.
 Since PyTorch is heavy dependency, I used the ONNX version of CLIP via fastembed.
 fastembed is Qdrant's library that wraps ONNX CLIP models with a simple .embed() API — it downloads/caches the ONNX weights and handles preprocessing (tokenizing text, resizing/normalizing images) for you.
 """
@@ -13,10 +14,12 @@ import numpy as np
 
 MODEL_CACHE_DIR = Path.home() / ".lumen" / "models" #This is where we cache the ONNX models, so we don't have to redownload them every time.
 
-# Matched CLIP encoders — both halves of the SAME model, so their outputs live in one comparable space.
-TEXT_MODEL = "Qdrant/clip-ViT-B-32-text"
-IMAGE_MODEL = "Qdrant/clip-ViT-B-32-vision"
-EMBED_DIM = 512
+# jina-clip-v1: one model whose text and image towers share a 768-dim space.
+# Stronger at descriptive/compositional retrieval than CLIP ViT-B/32, still ONNX
+# on CPU (no PyTorch). 
+TEXT_MODEL = "jinaai/jina-clip-v1"
+IMAGE_MODEL = "jinaai/jina-clip-v1"
+EMBED_DIM = 768
 
 @lru_cache(maxsize=1)
 def _text_model():

@@ -88,7 +88,8 @@ def _show(results):
 def cmd_search(args):
     from engine.search import search_text
 
-    _show(search_text(args.query, limit=args.limit))
+    _show(search_text(args.query, limit=args.limit,
+                      require_objects=not args.no_objects))
 
 
 def cmd_similar(args):
@@ -107,6 +108,8 @@ def main(argv=None):
 
     ps = sub.add_parser("search", help="search by text")
     ps.add_argument("query")
+    ps.add_argument("--no-objects", action="store_true",
+                    help="disable YOLO object-presence filtering (pure CLIP)")
     ps.add_argument("-n", "--limit", type=int, default=20)
     ps.set_defaults(func=cmd_search)
 

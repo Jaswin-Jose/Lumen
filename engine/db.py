@@ -28,6 +28,7 @@ class ImageRecord(LanceModel):
     path: str  # absolute file path (also our unique id)
     mtime: float  # last-modified time, for incremental re-indexing later
     size: int
+    labels: str  # detected objects, delimited: "|person|chair|tv|" (see detect.py)
     vector: Vector(EMBED_DIM)
 
 
