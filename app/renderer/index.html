@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' data:; connect-src 'self'; style-src 'self'; script-src 'self'" />
+  <title>Lumen</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">✦ Lumen</div>
+    <div class="searchbar">
+      <input id="q" type="text" autocomplete="off" spellcheck="false"
+             placeholder="Search by meaning…  e.g.  a yellow room with a woman" />
+      <button id="go">Search</button>
+    </div>
+    <label class="toggle" title="Require detected objects named in the query to actually be present">
+      <input type="checkbox" id="objects" checked /> Require objects
+    </label>
+    <div class="spacer"></div>
+    <button class="ghost" id="byimage">Search by image</button>
+    <button class="ghost" id="index">Index folder…</button>
+    <span id="stats" class="stats"></span>
+  </header>
+
+  <div id="progress" class="progress hidden">
+    <div class="bar"><div id="barfill" class="barfill"></div></div>
+    <span id="ptext" class="ptext"></span>
+  </div>
+
+  <div id="status" class="statusline hidden"></div>
+
+  <main id="results" class="grid"></main>
+
+  <div id="empty" class="empty">
+    <p>Search your indexed images by meaning.</p>
+    <p class="dim">Type a query above, click <b>Search by image</b>, or drop an image anywhere.</p>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

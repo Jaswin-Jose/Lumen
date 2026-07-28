@@ -1,0 +1,12 @@
+{
+  "name": "lumen",
+  "version": "0.1.0",
+  "description": "Lumen — local multimodal file search",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}
