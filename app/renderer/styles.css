@@ -1,0 +1,157 @@
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --panel-2: #1e222b;
+  --border: #2a2f3a;
+  --text: #e7e9ee;
+  --dim: #9aa2b1;
+  --accent: #6ea8fe;
+  --accent-ink: #0b1220;
+  --shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body { display: flex; flex-direction: column; }
+
+/* ---- header ---- */
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand {
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.searchbar { display: flex; gap: 8px; flex: 1; min-width: 240px; max-width: 640px; }
+
+#q {
+  flex: 1;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 14px;
+  outline: none;
+}
+#q:focus { border-color: var(--accent); }
+
+button {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:hover { filter: brightness(1.07); }
+button:active { transform: translateY(1px); }
+
+button.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+button.ghost:hover { background: var(--panel-2); }
+
+.toggle { display: flex; align-items: center; gap: 6px; color: var(--dim); white-space: nowrap; user-select: none; }
+.toggle input { accent-color: var(--accent); }
+
+.spacer { flex: 0 1 8px; }
+.stats { color: var(--dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* ---- progress + status ---- */
+.progress { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); }
+.bar { flex: 1; height: 6px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+.barfill { height: 100%; width: 0; background: var(--accent); transition: width 0.25s ease; }
+.ptext { color: var(--dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.statusline { padding: 8px 16px; color: var(--dim); border-bottom: 1px solid var(--border); }
+
+.hidden { display: none !important; }
+
+/* ---- results grid ---- */
+.grid {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 16px;
+  align-content: start;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow); }
+
+.thumbwrap {
+  aspect-ratio: 1 / 1;
+  background: var(--panel-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+.thumbwrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.score {
+  position: absolute; top: 6px; right: 6px;
+  background: rgba(0,0,0,0.6); color: #fff;
+  padding: 2px 7px; border-radius: 999px;
+  font-size: 11px; font-variant-numeric: tabular-nums;
+}
+
+.meta { padding: 8px 10px; }
+.name { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.actions { display: flex; gap: 6px; padding: 0 10px 10px; }
+.actions button {
+  flex: 1; font-size: 11px; padding: 6px 4px;
+  background: var(--panel-2); color: var(--dim); border: 1px solid var(--border); font-weight: 500;
+}
+.actions button:hover { color: var(--text); border-color: var(--accent); background: var(--panel-2); }
+
+/* ---- empty state ---- */
+.empty { margin: auto; text-align: center; color: var(--text); padding: 40px; }
+.empty .dim { color: var(--dim); }
+
+/* drag feedback */
+body.dragging::after {
+  content: "Drop an image to find similar";
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 600;
+  background: rgba(15, 17, 21, 0.85);
+  border: 3px dashed var(--accent);
+  z-index: 100;
+  pointer-events: none;
+}

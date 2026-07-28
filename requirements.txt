@@ -2,3 +2,5 @@ fastembed
 lancedb
 pillow
 numpy
+fastapi
+uvicorn
